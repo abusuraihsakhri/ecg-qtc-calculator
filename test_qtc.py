@@ -7,7 +7,7 @@ import pytest
 from qtc import (
     rr_from_hr, hr_from_rr,
     qtc_bazett, qtc_fridericia, qtc_framingham, qtc_hodges,
-    qt_dispersion, classify_qtc, calculate_qtc,
+    qt_dispersion, classify_qtc, calculate_qtc, process_csv,
 )
 
 
@@ -205,3 +205,93 @@ class TestCalculateQTC:
         assert "qtc_fridericia" in result
         assert "qtc_framingham" in result
         assert "qtc_hodges" in result
+
+
+# ── Edge cases ─────────────────────────────────────────────────────
+
+class TestEdgeCases:
+    def test_rr_from_hr_very_high(self):
+        # Very high heart rate (200 bpm)
+        result = rr_from_hr(200)
+        assert result == 300.0
+
+    def test_rr_from_hr_very_low(self):
+        # Very low heart rate (30 bpm)
+        result = rr_from_hr(30)
+        assert result == 2000.0
+
+    def test_hr_from_rr_roundtrip(self):
+        # Test roundtrip conversion
+        original_hr = 72.0
+        rr = rr_from_hr(original_hr)
+        calculated_hr = hr_from_rr(rr)
+        assert abs(calculated_hr - original_hr) < 0.01
+
+    def test_qtc_bazett_known_values(self):
+        # Known clinical values
+        # QT=400ms, RR=1000ms (60bpm): QTc = 400/sqrt(1) = 400
+        assert abs(qtc_bazett(400, 1000) - 400.0) < 0.1
+
+    def test_classify_qtc_boundary_values(self):
+        # Test boundary values
+        assert classify_qtc(439.9, "male") == "normal"
+        assert classify_qtc(440.0, "male") == "borderline"
+        assert classify_qtc(450.0, "male") == "borderline"
+        assert classify_qtc(450.1, "male") == "prolonged"
+        assert classify_qtc(499.9, "male") == "prolonged"
+        assert classify_qtc(500.0, "male") == "dangerous"
+
+    def test_classify_qtc_female_boundary_values(self):
+        # Test boundary values for female
+        assert classify_qtc(459.9, "female") == "normal"
+        assert classify_qtc(460.0, "female") == "borderline"
+        assert classify_qtc(470.0, "female") == "borderline"
+        assert classify_qtc(470.1, "female") == "prolonged"
+
+    def test_classify_qtc_short_sex(self):
+        # Test short sex codes
+        assert classify_qtc(420, "m") == "normal"
+        assert classify_qtc(420, "f") == "normal"
+
+    def test_qt_dispersion_edge_cases(self):
+        # Test with very small dispersion
+        assert qt_dispersion(400, 399) == 1
+        # Test with large dispersion
+        assert qt_dispersion(600, 300) == 300
+
+
+# ── CSV processing ─────────────────────────────────────────────────
+
+class TestCSVProcessing:
+    def test_process_csv_path_traversal_input(self):
+        import pytest
+        with pytest.raises(ValueError):
+            process_csv("../etc/passwd", "output.csv")
+
+    def test_process_csv_path_traversal_output(self):
+        import pytest
+        with pytest.raises(ValueError):
+            process_csv("input.csv", "../etc/passwd")
+
+    def test_process_csv_path_traversal_with_absolute(self):
+        import pytest
+        # Path traversal with absolute path component
+        with pytest.raises(ValueError):
+            process_csv("/etc/../passwd", "output.csv")
+
+    def test_process_csv_sample_file(self, tmp_path):
+        import csv
+        # Create a sample CSV file
+        input_file = tmp_path / "test_input.csv"
+        output_file = tmp_path / "test_output.csv"
+
+        with open(input_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["patient_id", "qt_ms", "rr_ms", "hr_bpm"])
+            writer.writerow(["P001", "420", "800", "75"])
+            writer.writerow(["P002", "460", "900", "67"])
+
+        results = process_csv(str(input_file), str(output_file))
+        assert len(results) == 2
+        assert results[0]["patient_id"] == "P001"
+        assert "qtc_bazett" in results[0]

@@ -209,6 +209,15 @@ def calculate_qtc(qt_ms, rr_ms=None, hr_bpm=None, sex="male"):
 
 # ── CSV batch processing ─────────────────────────────────────────────
 
+def _validate_safe_path(path, param_name="path"):
+    """Validate that a file path is safe (no path traversal)."""
+    # Check for directory traversal attempts (..)
+    # This prevents accessing files outside the intended directory
+    if ".." in path:
+        raise ValueError(f"Unsafe {param_name} detected: {path}")
+    return path
+
+
 def process_csv(input_path, output_path):
     """Process a CSV file of QT measurements and write QTc results.
 
@@ -216,6 +225,10 @@ def process_csv(input_path, output_path):
     Optional column: sex (default 'male').
     """
     import csv
+
+    # Validate paths to prevent path traversal
+    input_path = _validate_safe_path(input_path, "input_path")
+    output_path = _validate_safe_path(output_path, "output_path")
 
     with open(input_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
