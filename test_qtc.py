@@ -89,22 +89,15 @@ class TestFramingham:
         assert abs(qtc_framingham(400, 1000) - 400.0) < 0.1
 
     def test_high_hr(self):
-        # QT=350ms, RR=600ms: QTc = 350 + 0.154*(1-0.6) = 350 + 0.0616 = 350.06
-        # Wait, that's in seconds: 0.154*(1-0.6) = 0.0616 but the formula uses ms?
-        # Actually the formula is QT + 0.154*(1-RR_s) where RR is in seconds
-        # So QTc = 350 + 0.154*(1-0.6) = 350 + 0.0616 = 350.06
-        # Hmm, that doesn't seem right. Let me re-check.
-        # The Framingham formula: QTc = QT + 0.154*(1-RR) where RR is in seconds
-        # QT=350, RR_s=0.6: QTc = 350 + 0.154*(1-0.6) = 350 + 0.0616 = 350.06
-        # That's a very small correction. The 0.154 constant is in ms per second.
+        # Framingham coefficient 0.154 seconds = 154 milliseconds.
         result = qtc_framingham(350, 600)
-        expected = 350 + 0.154 * (1 - 0.6)
+        expected = 350 + 154 * (1 - 0.6)
         assert abs(result - expected) < 0.1
 
     def test_low_hr(self):
-        # QT=420ms, RR=1200ms (1.2s): QTc = 420 + 0.154*(1-1.2) = 420 - 0.0308 = 419.97
+        # QT=420ms, RR=1200ms (1.2s): QTc = 420 - 30.8 = 389.2.
         result = qtc_framingham(420, 1200)
-        expected = 420 + 0.154 * (1 - 1.2)
+        expected = 420 + 154 * (1 - 1.2)
         assert abs(result - expected) < 0.1
 
 
