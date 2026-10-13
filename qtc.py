@@ -7,7 +7,7 @@ Corrected QT interval (QTc) calculation using four standard formulas:
 
   - Bazett (1920):      QTc = QT / sqrt(RR)        [most common; overcorrects at high HR]
   - Fridericia (1920):  QTc = QT / (RR)^(1/3)      [better at extremes of HR]
-  - Framingham (1992):  QTc = QT + 0.154*(1 - RR)  [linear regression model]
+  - Framingham (1992):  QTc = QT + 154*(1 - RR)  [linear regression model]
   - Hodges (1983):      QTc = QT + 1.75*(HR - 60)  [rate-corrected, no RR needed]
 
 All inputs in milliseconds (ms).  RR interval can be derived from heart rate:
@@ -42,7 +42,7 @@ def rr_from_hr(hr_bpm):
     >>> rr_from_hr(75)
     800.0
     """
-    if hr_bpm <= 0:
+    if not math.isfinite(hr_bpm) or hr_bpm <= 0:
         raise ValueError(f"Heart rate must be positive, got {hr_bpm}")
     return 60000.0 / hr_bpm
 
@@ -53,7 +53,7 @@ def hr_from_rr(rr_ms):
     >>> hr_from_rr(1000)
     60.0
     """
-    if rr_ms <= 0:
+    if not math.isfinite(rr_ms) or rr_ms <= 0:
         raise ValueError(f"RR interval must be positive, got {rr_ms}")
     return 60000.0 / rr_ms
 
@@ -64,7 +64,7 @@ def qtc_bazett(qt_ms, rr_ms):
     Reference: Bazett HC. Heart 1920;7:353-370.
     Overcorrects at high heart rates, undercorrects at low heart rates.
     """
-    if qt_ms <= 0:
+    if not math.isfinite(qt_ms) or qt_ms <= 0:
         raise ValueError(f"QT must be positive, got {qt_ms}")
     if rr_ms <= 0:
         raise ValueError(f"RR must be positive, got {rr_ms}")
@@ -87,7 +87,7 @@ def qtc_fridericia(qt_ms, rr_ms):
 
 
 def qtc_framingham(qt_ms, rr_ms):
-    """Framingham (Sagie) formula: QTc = QT + 0.154 * (1 - RR in seconds).
+    """Framingham (Sagie) formula: QTc = QT + 154 * (1 - RR in seconds), with QTc in ms.
 
     Reference: Sagie A, et al. Am J Cardiol 1992;70:797-801.
     Linear regression correction from the Framingham Heart Study.
@@ -97,7 +97,7 @@ def qtc_framingham(qt_ms, rr_ms):
     if rr_ms <= 0:
         raise ValueError(f"RR must be positive, got {rr_ms}")
     rr_s = rr_ms / 1000.0
-    return qt_ms + 0.154 * (1.0 - rr_s)
+    return qt_ms + 154.0 * (1.0 - rr_s)
 
 
 def qtc_hodges(qt_ms, hr_bpm):
@@ -123,7 +123,7 @@ def qt_dispersion(qt_max_ms, qt_min_ms):
 
     Reference: Day CP, et al. BMJ 1990;300:671-673.
     """
-    if qt_max_ms < 0 or qt_min_ms < 0:
+    if not all(math.isfinite(v) and v >= 0 for v in (qt_max_ms, qt_min_ms)):
         raise ValueError("QT values must be non-negative")
     if qt_min_ms > qt_max_ms:
         raise ValueError("QT min cannot exceed QT max")
@@ -142,7 +142,11 @@ def classify_qtc(qtc_ms, sex="male"):
         Female: normal < 460, borderline 460-470, prolonged > 470
         Both:   dangerous > 500 (Torsades de Pointes risk)
     """
-    sex = sex.lower()
+    if not isinstance(sex, str) or sex.strip().lower() not in ("male", "m", "female", "f"):
+        raise ValueError("Sex must be male or female")
+    sex = sex.strip().lower()
+    if not math.isfinite(qtc_ms) or qtc_ms <= 0:
+        raise ValueError("QTc must be finite and positive")
     if qtc_ms >= DANGEROUS_MS:
         return "dangerous"
     if sex in ("male", "m"):
@@ -209,12 +213,21 @@ def calculate_qtc(qt_ms, rr_ms=None, hr_bpm=None, sex="male"):
 
 # ── CSV batch processing ─────────────────────────────────────────────
 
+def _safe_csv_cell(value):
+    text = str(value) if value is not None else ""
+    if text.lstrip().startswith(("=", "+", "-", "@")) or text.startswith(("\\t", "\\r", "\\n")):
+        return "'" + text
+    return text
+
+
 def _validate_safe_path(path, param_name="path"):
     """Validate that a file path is safe (no path traversal)."""
-    # Check for directory traversal attempts (..)
-    # This prevents accessing files outside the intended directory
-    if ".." in path:
-        raise ValueError(f"Unsafe {param_name} detected: {path}")
+    # Input/output paths are CLI-controlled, not a filesystem sandbox.
+    from pathlib import Path
+    import os
+    path = os.fspath(path)
+    if not path or ".." in Path(path).parts:
+        raise ValueError(f"Unsafe {param_name} detected")
     return path
 
 
@@ -230,25 +243,37 @@ def process_csv(input_path, output_path):
     input_path = _validate_safe_path(input_path, "input_path")
     output_path = _validate_safe_path(output_path, "output_path")
 
+    from pathlib import Path
+    if Path(input_path).resolve() == Path(output_path).resolve():
+        raise ValueError("Input and output CSV files must be different")
+
     with open(input_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         fieldnames = list(reader.fieldnames or [])
+        if not fieldnames:
+            raise ValueError("CSV requires a header row")
+        if not any(k in fieldnames for k in ("qt_ms", "qt")):
+            raise ValueError("CSV requires a qt_ms or qt column")
+        if not any(k in fieldnames for k in ("rr_ms", "hr_bpm", "heart_rate")):
+            raise ValueError("CSV requires an rr_ms, hr_bpm or heart_rate column")
         rows = list(reader)
 
     results = []
     for row in rows:
         try:
+            if None in row:
+                raise ValueError("CSV row contains extra fields")
             qt = float(row.get("qt_ms") or row.get("qt"))
             rr = row.get("rr_ms")
             hr = row.get("hr_bpm") or row.get("heart_rate")
-            sex = row.get("sex", "male")
+            sex = row.get("sex") or "male"
             res = calculate_qtc(
                 qt,
                 rr_ms=float(rr) if rr else None,
                 hr_bpm=float(hr) if hr else None,
                 sex=sex,
             )
-        except (ValueError, TypeError, KeyError) as e:
+        except (ValueError, TypeError, KeyError, OverflowError) as e:
             res = {"error": str(e)}
         merged = {**row, **{k: str(v) for k, v in res.items()}}
         results.append(merged)
@@ -263,6 +288,7 @@ def process_csv(input_path, output_path):
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=out_fields)
         writer.writeheader()
-        writer.writerows(results)
+        # Quote spreadsheet formulas from untrusted CSV fields when exported.
+        writer.writerows([{k: _safe_csv_cell(v) for k, v in row.items()} for row in results])
 
     return results

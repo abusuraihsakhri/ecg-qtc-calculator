@@ -66,7 +66,8 @@ class AuditTrail:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            key = "DEV-ONLY-KEY-CHANGE-IN-PRODUCTION"
+            # Nonpersistent random key rather than a publicly known signing secret.
+            key = os.urandom(32).hex()
         self.secret_key = key.encode("utf-8")
         self.logs: List[Dict[str, Any]] = []
 
@@ -93,11 +94,24 @@ class AuditTrail:
         return entry
 
     def verify_integrity(self) -> bool:
-        for i, entry in enumerate(self.logs):
-            prev = self.logs[i-1]["current_hash"] if i > 0 else "GENESIS_BLOCK_0000000000000000"
-            if entry["prev_hash"] != prev:
-                return False
-        return True
+        previous = "GENESIS_BLOCK_0000000000000000"
+        try:
+            for entry in self.logs:
+                if entry["prev_hash"] != previous:
+                    return False
+                signing_input = "|".join(str(entry[k]) for k in (
+                    "audit_id", "timestamp", "actor", "actor_tier",
+                    "event_type", "payload_hash", "prev_hash"
+                ))
+                expected = hmac.new(
+                    self.secret_key, signing_input.encode("utf-8"), hashlib.sha256
+                ).hexdigest()
+                if not hmac.compare_digest(entry["current_hash"], expected):
+                    return False
+                previous = expected
+            return True
+        except (KeyError, TypeError):
+            return False
 
     def get_trail(self) -> List[Dict[str, Any]]:
         return self.logs
