@@ -16,7 +16,7 @@ ECG QTc Calculator estimates rate-corrected QT intervals using four published co
 
 The standalone application is in [web/index.html](web/index.html). It uses HTML, CSS and JavaScript, with **no Python runtime, server, third-party scripts, or API keys** required. Files may be served using any static web server.
 
-The repository includes a GitHub Pages deployment workflow; the live URL should only be used after Pages deployment is confirmed.
+GitHub Actions deploys the static calculator to the live application URL above.
 
 Privacy: the static calculator processes entered measurements in the browser without storing or transmitting them. The optional backend and legacy audit features have different data-handling considerations; do not submit patient identifiers or protected health information to a publicly accessible server.
 
