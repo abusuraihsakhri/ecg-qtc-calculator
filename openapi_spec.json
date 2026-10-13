@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Ecg Qtc Calculator API",
-    "description": "Enterprise Distributed Component Platform (Clinical & Cryptographic AI) adhering to CAP / CLSI / NIST Standards.",
+    "description": "QTc calculation API and demonstration-only legacy audit endpoints. Not a medical device.",
     "version": "3.0.0-ENTERPRISE",
     "contact": {
       "name": "Dr. Abu Suraih Sakhri",
@@ -22,7 +22,7 @@
     },
     "/metrics": {
       "get": {
-        "summary": "Prometheus operational metrics",
+        "summary": "Return in-memory demonstration counters as JSON",
         "responses": {
           "200": {
             "description": "Prometheus text metrics"
@@ -32,7 +32,7 @@
     },
     "/api/audit": {
       "post": {
-        "summary": "Dispatch task payload across specialized workers",
+        "summary": "Evaluate a demonstration task with generic nonclinical thresholds",
         "requestBody": {
           "content": {
             "application/json": {
@@ -76,7 +76,7 @@
     },
     "/api/chat": {
       "post": {
-        "summary": "Air-gapped supervisory conversational assistant",
+        "summary": "Return a demonstration-only mock supervisor response",
         "requestBody": {
           "content": {
             "application/json": {
@@ -103,10 +103,54 @@
     },
     "/api/audit/logs": {
       "get": {
-        "summary": "Retrieve and cryptographically verify HMAC audit trail",
+        "summary": "Read in-memory HMAC audit log and integrity status",
         "responses": {
           "200": {
             "description": "Cryptographic audit trail"
+          }
+        }
+      }
+    },
+    "/api/qtc": {
+      "post": {
+        "summary": "Calculate QTc using Bazett, Fridericia, Framingham and Hodges",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "qt_ms": {
+                    "type": "number"
+                  },
+                  "rr_ms": {
+                    "type": "number"
+                  },
+                  "hr_bpm": {
+                    "type": "number"
+                  },
+                  "sex": {
+                    "type": "string",
+                    "enum": [
+                      "male",
+                      "female"
+                    ]
+                  }
+                },
+                "required": [
+                  "qt_ms"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "QTc calculations in milliseconds with classification"
+          },
+          "422": {
+            "description": "Invalid measurements"
           }
         }
       }
