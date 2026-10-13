@@ -66,7 +66,7 @@ def qtc_bazett(qt_ms, rr_ms):
     """
     if not math.isfinite(qt_ms) or qt_ms <= 0:
         raise ValueError(f"QT must be positive, got {qt_ms}")
-    if rr_ms <= 0:
+    if not math.isfinite(rr_ms) or rr_ms <= 0:
         raise ValueError(f"RR must be positive, got {rr_ms}")
     rr_s = rr_ms / 1000.0
     return qt_ms / math.sqrt(rr_s)
@@ -78,9 +78,9 @@ def qtc_fridericia(qt_ms, rr_ms):
     Reference: Fridericia LS. Acta Med Scand 1920;53:469-486.
     Better performance at extreme heart rates than Bazett.
     """
-    if qt_ms <= 0:
+    if not math.isfinite(qt_ms) or qt_ms <= 0:
         raise ValueError(f"QT must be positive, got {qt_ms}")
-    if rr_ms <= 0:
+    if not math.isfinite(rr_ms) or rr_ms <= 0:
         raise ValueError(f"RR must be positive, got {rr_ms}")
     rr_s = rr_ms / 1000.0
     return qt_ms / (rr_s ** (1.0 / 3.0))
@@ -92,9 +92,9 @@ def qtc_framingham(qt_ms, rr_ms):
     Reference: Sagie A, et al. Am J Cardiol 1992;70:797-801.
     Linear regression correction from the Framingham Heart Study.
     """
-    if qt_ms <= 0:
+    if not math.isfinite(qt_ms) or qt_ms <= 0:
         raise ValueError(f"QT must be positive, got {qt_ms}")
-    if rr_ms <= 0:
+    if not math.isfinite(rr_ms) or rr_ms <= 0:
         raise ValueError(f"RR must be positive, got {rr_ms}")
     rr_s = rr_ms / 1000.0
     return qt_ms + 154.0 * (1.0 - rr_s)
@@ -106,9 +106,9 @@ def qtc_hodges(qt_ms, hr_bpm):
     Reference: Hodges M, et al. Am J Cardiol 1983;51:1577-1578.
     Does not require RR interval; uses heart rate directly.
     """
-    if qt_ms <= 0:
+    if not math.isfinite(qt_ms) or qt_ms <= 0:
         raise ValueError(f"QT must be positive, got {qt_ms}")
-    if hr_bpm <= 0:
+    if not math.isfinite(hr_bpm) or hr_bpm <= 0:
         raise ValueError(f"Heart rate must be positive, got {hr_bpm}")
     return qt_ms + 1.75 * (hr_bpm - 60.0)
 
@@ -177,13 +177,13 @@ def calculate_qtc(qt_ms, rr_ms=None, hr_bpm=None, sex="male"):
     """
     if rr_ms is None and hr_bpm is None:
         raise ValueError("Must provide either rr_ms or hr_bpm")
-    if qt_ms <= 0:
+    if not math.isfinite(qt_ms) or qt_ms <= 0:
         raise ValueError(f"QT must be positive, got {qt_ms}")
 
     # Derive RR from HR if needed
     if rr_ms is None:
         rr_ms = rr_from_hr(hr_bpm)
-    if rr_ms <= 0:
+    if not math.isfinite(rr_ms) or rr_ms <= 0:
         raise ValueError(f"RR interval must be positive, got {rr_ms}")
 
     # Derive HR from RR
@@ -215,13 +215,13 @@ def calculate_qtc(qt_ms, rr_ms=None, hr_bpm=None, sex="male"):
 
 def _safe_csv_cell(value):
     text = str(value) if value is not None else ""
-    if text.lstrip().startswith(("=", "+", "-", "@")) or text.startswith(("\\t", "\\r", "\\n")):
+    if text.lstrip().startswith(("=", "+", "-", "@")) or text.startswith(("\t", "\r", "\n")):
         return "'" + text
     return text
 
 
 def _validate_safe_path(path, param_name="path"):
-    """Validate that a file path is safe (no path traversal)."""
+    """Reject traversal segments in CLI paths (not a directory sandbox)."""
     # Input/output paths are CLI-controlled, not a filesystem sandbox.
     from pathlib import Path
     import os
@@ -239,7 +239,7 @@ def process_csv(input_path, output_path):
     """
     import csv
 
-    # Validate paths to prevent path traversal
+    # Reject traversal components in user-supplied paths
     input_path = _validate_safe_path(input_path, "input_path")
     output_path = _validate_safe_path(output_path, "output_path")
 
