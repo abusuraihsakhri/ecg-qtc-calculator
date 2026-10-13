@@ -69,3 +69,9 @@ def api_chat(req: ChatRequest):
 @app.get("/api/audit/logs")
 def api_audit_logs():
     return {"audit_trail": AuditLogger.get_trail(), "verified": AuditLogger.verify_integrity()}
+
+
+# Serve the same static browser application from the optional API server.
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory=str(Path(__file__).resolve().parent.parent / "web"), html=True), name="browser")
