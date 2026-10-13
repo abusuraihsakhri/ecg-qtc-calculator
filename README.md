@@ -1,5 +1,7 @@
 # ECG QTc Calculator
 
+### [Open the Live Application →](https://abusuraihsakhri.github.io/ecg-qtc-calculator/)
+
 ECG QTc Calculator estimates rate-corrected QT intervals using four published correction formulas. It provides a **standalone browser calculator**, a standard-library Python API/CLI, batch CSV processing, and an optional FastAPI endpoint.
 
 ## Features
