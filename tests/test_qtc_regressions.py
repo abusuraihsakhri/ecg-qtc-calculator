@@ -24,7 +24,7 @@ def test_csv_escape(tmp_path):
     output=tmp_path/"output.csv"
     source.write_text('patient_id,qt_ms,rr_ms\n"=1+1",350,600\n',encoding="utf-8")
     rows=process_csv(source,output)
-    assert rows[0]["qtc_framingham"] == 411.6
+    assert float(rows[0]["qtc_framingham"]) == 411.6
     with output.open(newline="") as f:
         assert list(csv.DictReader(f))[0]["patient_id"]=="'=1+1"
     with pytest.raises(ValueError): process_csv(source,source)
